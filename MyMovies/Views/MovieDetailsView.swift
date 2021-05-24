@@ -5,18 +5,22 @@
 //  Created by Devin on 5/23/21.
 //
 
+import Combine
 import SwiftUI
 import SDWebImageSwiftUI
 
 struct MovieDetailsView: View {
     let movie: Movie
     
-    @State private var details = Bundle.main.decode(MovieDetails.self, from: "details.json")
-    @State private var credits = Bundle.main.decode(Credits.self, from: "credits.json", keyDecodingStrategy: .convertFromSnakeCase)
+    @State private var details: MovieDetails?
+    @State private var credits: Credits?
+    @State private var requests = Set<AnyCancellable>()
+    
     @State private var showingAllCast = false
     @State private var showingAllCrew = false
     
     var displayedCast: [CastMember] {
+        guard let credits = credits else { return [] }
         if showingAllCast {
             return credits.cast
         } else {
@@ -25,6 +29,8 @@ struct MovieDetailsView: View {
     }
     
     var displayedCrew: [CrewMember] {
+        guard let credits = credits else { return [] }
+        
         if showingAllCrew {
             return credits.crew
         } else {
@@ -43,16 +49,17 @@ struct MovieDetailsView: View {
                             .scaledToFill()
                             .frame(maxHeight: 200)
                     }
-                    
-                    HStack(spacing: 20) {
-                        Text("Revenue: $\(details.revenue)")
-                        Text("\(details.runtime) minutes")
+                    if let details = details {
+                        HStack(spacing: 20) {
+                            Text("Revenue: $\(details.revenue)")
+                            Text("\(details.runtime) minutes")
+                        }
+                        .foregroundColor(.white)
+                        .font(.caption.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.black)
                     }
-                    .foregroundColor(.white)
-                    .font(.caption.bold())
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.black)
                 }
                 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -116,6 +123,21 @@ struct MovieDetailsView: View {
         }
         .navigationTitle(movie.title)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: {
+            fetchMovieDetails()
+        })
+    }
+    
+    func fetchMovieDetails() {
+        let movieRequest = URLSession.shared.get(path: "movie/\(movie.id)", defaultValue: nil) { downloaded in
+            details = downloaded
+        }
+        
+        let creditsRequest = URLSession.shared.get(path: "movie/\(movie.id)/credits", defaultValue: nil) { downloaded in
+            credits = downloaded
+        }
+        if let movieRequest = movieRequest { requests.insert(movieRequest) }
+        if let creditsRequest = creditsRequest { requests.insert(creditsRequest) }
     }
 }//End of Struct
 
