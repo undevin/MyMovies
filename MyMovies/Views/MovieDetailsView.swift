@@ -12,12 +12,21 @@ import SDWebImageSwiftUI
 struct MovieDetailsView: View {
     let movie: Movie
     
+    @EnvironmentObject var dataController: DataController
+    
     @State private var details: MovieDetails?
     @State private var credits: Credits?
     @State private var requests = Set<AnyCancellable>()
     
     @State private var showingAllCast = false
     @State private var showingAllCrew = false
+    
+    @State private var reviews = [Review]()
+    @State private var reviewText = ""
+    
+    var reviewURL: URL? {
+        URL(string: "https://www.hackingwithswitch.com/samples/ios-accelerator/\(movie.id)")
+    }
     
     var displayedCast: [CastMember] {
         guard let credits = credits else { return [] }
@@ -117,10 +126,36 @@ struct MovieDetailsView: View {
                         }
                         .padding(.vertical)
                     }
+                    
+                    Text("Reviews")
+                        .font(.title)
+                    
+                    ForEach(reviews) { review in
+                        Text(review.text)
+                            .font(.body.italic())
+                    }
+                    
+                    TextEditor(text: $reviewText)
+                        .frame(height: 200)
+                        .border(Color.gray, width: 1)
+                    
+                    Button("Submit Review", action: submitReview)
+                    
                 }
                 .padding(.horizontal, 10)
             }
         }
+        .toolbar(content: {
+            Button {
+                dataController.toggleFavorite(movie)
+            } label: {
+                if dataController.isFavorite(movie) {
+                    Image(systemName: "heart.fill")
+                } else {
+                    Image(systemName: "heart")
+                }
+            }
+        })
         .navigationTitle(movie.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: {
@@ -138,6 +173,27 @@ struct MovieDetailsView: View {
         }
         if let movieRequest = movieRequest { requests.insert(movieRequest) }
         if let creditsRequest = creditsRequest { requests.insert(creditsRequest) }
+        
+        guard let reviewURL = reviewURL else { return }
+        let reviewsRequest = URLSession.shared.fetch(reviewURL, defaultValue: []) { downloaded in
+            reviews = downloaded
+        }
+        requests.insert(reviewsRequest)
+    }
+    
+    func submitReview() {
+        guard reviewText.isEmpty == false else { return }
+        guard let reviewURL = reviewURL else { return }
+        
+        let review = Review(id: UUID().uuidString, text: reviewText)
+        
+        let request = URLSession.shared.post(review, to: reviewURL) { result in
+            if result == "OK" {
+                reviews.append(review)
+                reviewText = ""
+            }
+        }
+        requests.insert(request)
     }
 }//End of Struct
 
@@ -145,6 +201,7 @@ struct MovieDetailView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationView {
             MovieDetailsView(movie: Movie.example)
+                .environmentObject(DataController(inMemory: true))
         }
     }
 }
